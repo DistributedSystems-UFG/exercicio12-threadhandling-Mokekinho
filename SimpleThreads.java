@@ -6,6 +6,26 @@ public class SimpleThreads {
         System.out.format("%s: %s%n", threadName, message);
     }
 
+	private static class CPUIntensive implements Runnable {
+        public void run() {
+            threadMessage("Calculando seno e consseno");
+            double senTimesCosseno = 0.0;
+            try {
+                for (long i = 0; i < Long.MAX_VALUE; i++) {
+                    if (Thread.currentThread().isInterrupted()) {
+                        throw new InterruptedException();
+                    }
+                    senTimesCosseno += Math.sin(i) * Math.cos(i);
+                }
+                threadMessage("Resultado: " + senTimesCosseno);
+                
+            } catch (InterruptedException e) {
+                threadMessage("Interupção");
+            }
+        }
+    }
+	
+	
     private static class MessageLoop
         implements Runnable {
         public void run() {
@@ -28,11 +48,12 @@ public class SimpleThreads {
         }
     }
 
-    public static void main(String args[])
-        throws InterruptedException {
+	
 
-        // Delay, in milliseconds before we interrupt MessageLoop thread (default one hour)
-        long patience = 1000 * 60 * 60;
+    public static void main(String args[]) throws InterruptedException {
+
+        // Delay, em milissegundos, antes de interromper as threads.
+        long patience = 1000 * 6; 
 
         // If command line argument present, gives patience in seconds
         if (args.length > 0) {
@@ -46,26 +67,39 @@ public class SimpleThreads {
 
         threadMessage("Starting MessageLoop thread");
         long startTime = System.currentTimeMillis();
-        Thread t = new Thread(new MessageLoop());
+        
+        Thread t = new Thread(new MessageLoop(), "Thread-Mensagem");
+        Thread cpuThread = new Thread(new CPUIntensive(), "Thread-CPU-Intensa");
 
-	// Put the MessageLoop thread to run
         t.start();
+        cpuThread.start();
 
-        threadMessage("Waiting for MessageLoop thread to finish");
-	
-        // loop until MessageLoop thread exits
-        while (t.isAlive()) {
+        threadMessage("Waiting for threads to finish");
+        
+        while (t.isAlive() || cpuThread.isAlive()) {
             threadMessage("Still waiting...");
-            // Wait maximum of 1 second for MessageLoop thread to finish
-            t.join(1000);
-            if (((System.currentTimeMillis() - startTime) > patience) && t.isAlive()) {
-                threadMessage("Tired of waiting!");
-		// Force the interruption of the MainLoop thread
-                t.interrupt();
-                // ...and wait for it to finish -- shouldn't be long now 
-                t.join();
+            
+            if (t.isAlive()) t.join(1000);
+            if (cpuThread.isAlive()) cpuThread.join(1000);
+            
+            if ((System.currentTimeMillis() - startTime) > patience) {
+                
+                if (t.isAlive() || cpuThread.isAlive()) {
+                    threadMessage("Tired of waiting!");
+                }
+                
+                if (t.isAlive()) {
+                    t.interrupt();
+                    t.join();
+                }
+            
+                if (cpuThread.isAlive()) {
+                    cpuThread.interrupt();
+                    cpuThread.join();
+                }
             }
         }
         threadMessage("Finally!");
     }
 }
+
